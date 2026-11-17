@@ -4,6 +4,7 @@ pnpm-lock.yaml
 # bot
 bot/commands/log.json
 bot/database/db.sqlite
+bot/commands/utils/youtube.js
 
 # env
 .env
