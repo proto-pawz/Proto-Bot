@@ -39,6 +39,8 @@ export const data = new SlashCommandBuilder()
 const ALLOWED_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif']);
 const MASK_PATH = path.join(import.meta.dirname, 'speechbubble-mask.png');
 
+class ImageFetchError extends Error { }
+
 let maskPromise;
 
 function loadMask() {
@@ -101,13 +103,65 @@ function parseImageUrl(value) {
     return url;
 }
 
+function isDiscordCdnUrl(url) {
+    const host = url.hostname.toLowerCase();
+    const pathname = url.pathname;
+
+    return (host === 'cdn.discordapp.com' || host === 'media.discordapp.net')
+        && (pathname.startsWith('/attachments/') || pathname.startsWith('/ephemeral-attachments/'));
+}
+
+async function refreshDiscordUrl(client, url) {
+    try {
+        const data = await client.rest.post('/attachments/refresh-urls', {
+            body: { attachment_urls: [url] },
+            auth: true
+        });
+        const refreshed = data?.refreshed_urls?.[0]?.refreshed;
+
+        return typeof refreshed === 'string' ? refreshed : url;
+    }
+    catch (error) {
+        console.error('Failed to refresh Discord CDN URL:', error);
+        return url;
+    }
+}
+
 async function downloadImage(url) {
-    const response = await fetch(url);
+    let response;
 
-    if (!response.ok)
-        throw new Error(`Failed to download image (${response.status})`);
+    try {
+        response = await fetch(url);
+    }
+    catch {
+        throw new ImageFetchError('Could not reach that image URL. Make sure it is a valid, public, direct image link.');
+    }
 
-    return Buffer.from(await response.arrayBuffer());
+    if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+            throw new ImageFetchError(
+                `The image host refused access (HTTP ${response.status}). The link may be private, expired, or missing its access parameters.`
+            );
+        }
+
+        if (response.status === 404) {
+            throw new ImageFetchError(
+                'The image was not found (HTTP 404). The link may be expired, deleted, or missing its access parameters.'
+            );
+        }
+
+        if (response.status === 429)
+            throw new ImageFetchError('The image host is rate-limiting requests (HTTP 429). Please try again later.');
+
+        throw new ImageFetchError(`The image host returned HTTP ${response.status}.`);
+    }
+
+    try {
+        return Buffer.from(await response.arrayBuffer());
+    }
+    catch {
+        throw new ImageFetchError('The image download was interrupted. Please try again.');
+    }
 }
 
 async function resizeMask(width, height, mask) {
@@ -175,6 +229,7 @@ export async function execute(interaction) {
     }
 
     let imageUrl;
+    let shouldRefreshUrl = false;
 
     if (image) {
         const extension = path.extname(image.name).slice(1).toLowerCase();
@@ -199,11 +254,15 @@ export async function execute(interaction) {
         }
 
         imageUrl = url.href;
+        shouldRefreshUrl = isDiscordCdnUrl(url);
     }
 
     await interaction.deferReply();
 
     try {
+        if (shouldRefreshUrl)
+            imageUrl = await refreshDiscordUrl(interaction.client, imageUrl);
+
         const input = await downloadImage(imageUrl);
         const gif = await createSpeechbubble(input);
 
@@ -214,7 +273,9 @@ export async function execute(interaction) {
     catch (error) {
         console.error('speechbubble command failed:', error);
         await interaction.editReply({
-            content: '❌ Failed to create that speech bubble GIF. Make sure the file or URL points directly to a PNG, JPG, WebP, or GIF image.'
+            content: error instanceof ImageFetchError
+                ? `❌ ${error.message}`
+                : '❌ Could not convert that file or URL. Make sure it is a valid PNG, JPG, WebP, or GIF image.'
         });
     }
 }
