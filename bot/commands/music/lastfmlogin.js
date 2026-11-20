@@ -22,6 +22,11 @@ import {
     subcommand as logoutSubcommand
 } from './lastfmlogout.js';
 
+import {
+    execute as executeProfile,
+    subcommand as profileSubcommand
+} from './lastfmprofile.js';
+
 export const global = true;
 
 export const data = new SlashCommandBuilder()
@@ -32,6 +37,7 @@ export const data = new SlashCommandBuilder()
         .setDescription('Connect your Last.fm account')
     )
     .addSubcommand(logoutSubcommand)
+    .addSubcommand(profileSubcommand)
     .setIntegrationTypes(
         ApplicationIntegrationType.GuildInstall,
         ApplicationIntegrationType.UserInstall
@@ -63,6 +69,9 @@ export async function execute(interaction) {
 
     if (subcommand === 'logout')
         return executeLogout(interaction);
+
+    if (subcommand === 'profile')
+        return executeProfile(interaction);
 
     if (subcommand !== 'login')
         return;
