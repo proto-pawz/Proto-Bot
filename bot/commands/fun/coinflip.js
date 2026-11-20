@@ -1,11 +1,15 @@
 import {
-    SlashCommandBuilder,
-    EmbedBuilder,
     ActionRowBuilder,
+    ApplicationIntegrationType,
     ButtonBuilder,
     ButtonStyle,
-    ApplicationIntegrationType,
-    InteractionContextType
+    ContainerBuilder,
+    InteractionContextType,
+    MessageFlags,
+    SeparatorBuilder,
+    SeparatorSpacingSize,
+    SlashCommandBuilder,
+    TextDisplayBuilder
 } from 'discord.js';
 
 export const global = true;
@@ -24,6 +28,7 @@ export const data = new SlashCommandBuilder()
     );
 
 const HISTORY_LENGTH = 10;
+const FLAGS = MessageFlags.IsComponentsV2;
 
 function flip() {
     const heads = Math.random() < 0.5;
@@ -35,7 +40,7 @@ function flip() {
     };
 }
 
-function createEmbed(interaction, flips) {
+function createContainer(interaction, flips) {
     const { heads, result } = flips[flips.length - 1];
 
     const displayName =
@@ -43,21 +48,6 @@ function createEmbed(interaction, flips) {
     const where = interaction.inGuild()
         ? `in ${interaction.guild.name}`
         : 'in a DM';
-
-    return new EmbedBuilder()
-        .setColor(heads ? 0xF1C40F : 0x95A5A6)
-        .setTitle('🪙 Coinflip')
-        .setDescription(`The coin landed on **${result}**!`)
-        .addFields({
-            name: 'History',
-            value: flips.map(f => f.letter).join(', ')
-        })
-        .setFooter({ text: `Flipped by ${displayName} ${where}` })
-        .setTimestamp();
-}
-
-export async function execute(interaction) {
-    const flips = [flip()];
 
     const button = new ActionRowBuilder()
         .addComponents(
@@ -67,9 +57,32 @@ export async function execute(interaction) {
                 .setStyle(ButtonStyle.Primary)
         );
 
+    return new ContainerBuilder()
+        .setAccentColor(heads ? 0xF1C40F : 0x95A5A6)
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('## 🪙 Coinflip'),
+            new TextDisplayBuilder().setContent(`The coin landed on **${result}**!`),
+            new TextDisplayBuilder()
+                .setContent(`**History**\n${flips.map(f => f.letter).join(', ')}`)
+        )
+        .addSeparatorComponents(
+            new SeparatorBuilder()
+                .setDivider(true)
+                .setSpacing(SeparatorSpacingSize.Small)
+        )
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(`-# Flipped by ${displayName} ${where}`)
+        )
+        .addActionRowComponents(button);
+}
+
+export async function execute(interaction) {
+    const flips = [flip()];
+
     await interaction.reply({
-        embeds: [createEmbed(interaction, flips)],
-        components: [button]
+        components: [createContainer(interaction, flips)],
+        flags: FLAGS,
+        allowedMentions: { parse: [] }
     });
 
     const msg = await interaction.fetchReply();
@@ -81,7 +94,11 @@ export async function execute(interaction) {
         flips.push(flip());
         if (flips.length > HISTORY_LENGTH) flips.shift();
 
-        await i.update({ embeds: [createEmbed(interaction, flips)] });
+        await i.update({
+            components: [createContainer(interaction, flips)],
+            flags: FLAGS,
+            allowedMentions: { parse: [] }
+        });
     });
 }
 
