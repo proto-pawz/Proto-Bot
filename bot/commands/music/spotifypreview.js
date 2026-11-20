@@ -144,8 +144,6 @@ function createAudioFileName(track, artists) {
         .trim()
         .slice(0, 100);
 
-    // Discord sanitizes spaces in uploaded filenames to underscores while
-    // preserving the original name as the attachment title.
     return `${safe || 'spotify-preview'}.mp3`;
 }
 
