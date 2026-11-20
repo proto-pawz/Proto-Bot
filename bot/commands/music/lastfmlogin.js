@@ -17,6 +17,11 @@ import {
     isDatabaseConfigured
 } from '../../database/lastfm.js';
 
+import {
+    execute as executeLogout,
+    subcommand as logoutSubcommand
+} from './lastfmlogout.js';
+
 export const global = true;
 
 export const data = new SlashCommandBuilder()
@@ -26,6 +31,7 @@ export const data = new SlashCommandBuilder()
         .setName('login')
         .setDescription('Connect your Last.fm account')
     )
+    .addSubcommand(logoutSubcommand)
     .setIntegrationTypes(
         ApplicationIntegrationType.GuildInstall,
         ApplicationIntegrationType.UserInstall
@@ -53,7 +59,12 @@ function createNotice(content) {
 }
 
 export async function execute(interaction) {
-    if (interaction.options.getSubcommand() !== 'login')
+    const subcommand = interaction.options.getSubcommand();
+
+    if (subcommand === 'logout')
+        return executeLogout(interaction);
+
+    if (subcommand !== 'login')
         return;
 
     const apiKey = process.env.LASTFM_API_KEY;
@@ -121,11 +132,15 @@ export async function execute(interaction) {
                 .setURL(authUrl.toString())
         );
 
-    const note = new TextDisplayBuilder()
-        .setContent('-# Once you authorize, your account will be linked to Proto Bot');
+    container
+        .addActionRowComponents(button)
+        .addTextDisplayComponents(
+            new TextDisplayBuilder()
+                .setContent('-# Once you authorize, your account will be linked to Proto Bot')
+        );
 
     await interaction.editReply({
-        components: [container, button, note],
+        components: [container],
         flags: EPHEMERAL_V2,
         allowedMentions: { parse: [] }
     });

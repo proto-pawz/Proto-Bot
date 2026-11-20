@@ -70,6 +70,17 @@ export async function getLastfmSession(discordUserId) {
     return rows[0] || null;
 }
 
+export async function deleteLastfmSession(discordUserId) {
+    await ensureSchema();
+
+    const { rowCount } = await query(`
+        DELETE FROM lastfm_sessions
+        WHERE discord_user_id = $1
+    `, [discordUserId]);
+
+    return rowCount > 0;
+}
+
 export function getLastfmPool() {
     return getPool();
 }
