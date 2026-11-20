@@ -19,15 +19,25 @@ export const global = true;
 
 export const data = new SlashCommandBuilder()
     .setName('spotify')
-    .setDescription('Search Spotify.')
+    .setDescription('Spotify commands')
     .addSubcommand(subcommand => subcommand
         .setName('search')
-        .setDescription('Search Spotify for a song.')
+        .setDescription('Search for Spotify tracks')
         .addStringOption(option => option
             .setName('query')
-            .setDescription('The song, artist, or album to search for.')
+            .setDescription('Song name or artist')
             .setRequired(true)
             .setMaxLength(200)
+        )
+    )
+    .addSubcommand(subcommand => subcommand
+        .setName('preview')
+        .setDescription('Play a 30s preview of a Spotify track')
+        .addStringOption(option => option
+            .setName('query')
+            .setDescription('Song name, artist + song, or Spotify URL')
+            .setRequired(true)
+            .setMaxLength(500)
         )
     )
     .setIntegrationTypes(
@@ -43,14 +53,15 @@ export const data = new SlashCommandBuilder()
 const PAGE_SIZE = 4;
 const MAX_RESULTS = 10;
 const COLLECTOR_TIME = 5 * 60 * 1000;
-const TOKEN_URL = 'https://accounts.spotify.com/api/token';
-const SEARCH_URL = 'https://api.spotify.com/v1/search';
+export const TOKEN_URL = 'https://accounts.spotify.com/api/token';
+export const SEARCH_URL = 'https://api.spotify.com/v1/search';
+export const TRACK_URL = 'https://api.spotify.com/v1/tracks';
 const SPOTIFY_EMOJI_ID = '1274904265114124308';
 const PREVIOUS_EMOJI_ID = '1265476224742850633';
 const NEXT_EMOJI_ID = '1265476229876678768';
 const CANCEL_EMOJI_ID = '1317214464231079989';
 
-class SpotifyError extends Error { }
+export class SpotifyError extends Error { }
 
 let accessToken;
 let accessTokenExpiresAt = 0;
@@ -65,7 +76,7 @@ function getCredentials() {
     return { clientId, clientSecret };
 }
 
-async function getAccessToken() {
+export async function getAccessToken() {
     if (accessToken && Date.now() < accessTokenExpiresAt)
         return accessToken;
 
@@ -128,7 +139,7 @@ async function searchTracks(query) {
     return (result.tracks?.items ?? []).filter(Boolean);
 }
 
-function formatReleaseDate(album) {
+export function formatReleaseDate(album) {
     const date = album?.release_date;
     const precision = album?.release_date_precision;
 
@@ -156,7 +167,7 @@ function formatReleaseDate(album) {
     }).format(new Date(Date.UTC(parts[0], parts[1] - 1, parts[2])));
 }
 
-function escapeText(value) {
+export function escapeText(value) {
     return escapeMarkdown(String(value ?? '').replace(/\s+/g, ' ').trim(), {
         heading: true,
         maskedLink: true,
@@ -165,11 +176,11 @@ function escapeText(value) {
     });
 }
 
-function getArtists(track) {
+export function getArtists(track) {
     return track.artists?.map(artist => artist.name).filter(Boolean).join(', ') || 'Unknown Artist';
 }
 
-function getTrackText(track) {
+export function getTrackText(track) {
     return [
         `**${escapeText(track.name ?? 'Unknown Track')}**`,
         `-# Artist: **${escapeText(getArtists(track))}**`,
@@ -342,7 +353,14 @@ function getLyricsUrl(track) {
 }
 
 export async function execute(interaction) {
-    if (interaction.options.getSubcommand() !== 'search')
+    const subcommand = interaction.options.getSubcommand();
+
+    if (subcommand === 'preview') {
+        const { executePreview } = await import('./spotifypreview.js');
+        return executePreview(interaction);
+    }
+
+    if (subcommand !== 'search')
         return;
 
     const query = interaction.options.getString('query', true).replace(/\s+/g, ' ').trim();

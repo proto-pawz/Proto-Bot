@@ -100,6 +100,10 @@ class Bot {
     async loadCommands() {
         for await (const file of util.fsp.glob(COMMANDS)) {
             const command = await import(`file://${file}`);
+
+            if (!command.data)
+                continue;
+
             this.commands.set(command.data.name, command);
         }
     }

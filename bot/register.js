@@ -98,6 +98,9 @@ if ($action === 'delete') {
     for await (const file of util.fsp.glob(COMMANDS_GLOB)) {
         const module = await import(`file://${file}`);
 
+        if (!module.data)
+            continue;
+
         if (
             ($guild || module.global === true) &&
             ($commands.includes('ALL') || $commands.includes(module.data.name))
