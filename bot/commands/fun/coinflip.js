@@ -44,11 +44,10 @@ function createContainer(interaction, flips) {
     const { heads, result } = flips[flips.length - 1];
 
     const displayName =
-        interaction.member?.displayName ?? interaction.user.displayName;
-    const where = interaction.inGuild()
-        ? `in ${interaction.guild.name}`
-        : 'in a DM';
-
+        interaction.member?.displayName
+        ?? interaction.user?.displayName
+        ?? interaction.user?.username
+        ?? 'there';
     const button = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
@@ -71,7 +70,7 @@ function createContainer(interaction, flips) {
                 .setSpacing(SeparatorSpacingSize.Small)
         )
         .addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(`-# Flipped by ${displayName} ${where}`)
+            new TextDisplayBuilder().setContent(`-# Played by ${displayName}`)
         )
         .addActionRowComponents(button);
 }

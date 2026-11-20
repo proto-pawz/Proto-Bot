@@ -70,11 +70,10 @@ function formatHand(hand) {
 
 export async function execute(interaction) {
     const displayName =
-        interaction.member?.displayName ?? interaction.user.displayName;
-    const where = interaction.inGuild()
-        ? `in ${interaction.guild.name}`
-        : 'in a DM';
-
+        interaction.member?.displayName
+        ?? interaction.user?.displayName
+        ?? interaction.user?.username
+        ?? 'there';
     let deck;
     let playerHand;
     let dealerHand;
@@ -148,7 +147,7 @@ export async function execute(interaction) {
                     .setSpacing(SeparatorSpacingSize.Small)
             )
             .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent(`-# Played by ${displayName} ${where}`)
+                new TextDisplayBuilder().setContent(`-# Played by ${displayName}`)
             )
             .addActionRowComponents(buildButtons());
     }
