@@ -1,7 +1,10 @@
 import { performance } from 'node:perf_hooks';
 
 import {
+    ActionRowBuilder,
     AttachmentBuilder,
+    ButtonBuilder,
+    ButtonStyle,
     ContainerBuilder,
     MediaGalleryBuilder,
     MediaGalleryItemBuilder,
@@ -178,22 +181,31 @@ export async function execute(interaction) {
         const fileName = 'shorts.mp4';
         const title = truncate(player.videoDetails?.title ?? 'YouTube Short', MAX_TITLE_LENGTH);
         const elapsed = performance.now() - startedAt;
+        const button = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setLabel('Watch in YouTube')
+                    .setStyle(ButtonStyle.Link)
+                    .setURL(urlValue)
+            );
+
         const container = new ContainerBuilder()
             .setAccentColor(0xED4245)
             .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent(`**${title}**\n<${urlValue}>`)
+                new TextDisplayBuilder().setContent(title)
             )
             .addMediaGalleryComponents(
                 new MediaGalleryBuilder().addItems(
                     new MediaGalleryItemBuilder().setURL(`attachment://${fileName}`)
                 )
-            );
+            )
+            .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent(`Took ${formatElapsed(elapsed)}`)
+            )
+            .addActionRowComponents(button);
 
         await interaction.editReply({
-            components: [
-                new TextDisplayBuilder().setContent(`Look what I found! Took ${formatElapsed(elapsed)}.`),
-                container
-            ],
+            components: [container],
             files: [new AttachmentBuilder(video, { name: fileName })],
             flags: MessageFlags.IsComponentsV2
         });
