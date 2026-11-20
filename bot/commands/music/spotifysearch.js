@@ -31,6 +31,16 @@ export const data = new SlashCommandBuilder()
         )
     )
     .addSubcommand(subcommand => subcommand
+        .setName('album')
+        .setDescription('Browse a Spotify album')
+        .addStringOption(option => option
+            .setName('query')
+            .setDescription('Album name, artist + album, or Spotify URL')
+            .setRequired(true)
+            .setMaxLength(500)
+        )
+    )
+    .addSubcommand(subcommand => subcommand
         .setName('cover')
         .setDescription('Show the album cover art for a Spotify track')
         .addStringOption(option => option
@@ -66,6 +76,7 @@ const COLLECTOR_TIME = 5 * 60 * 1000;
 export const TOKEN_URL = 'https://accounts.spotify.com/api/token';
 export const SEARCH_URL = 'https://api.spotify.com/v1/search';
 export const TRACK_URL = 'https://api.spotify.com/v1/tracks';
+export const ALBUM_URL = 'https://api.spotify.com/v1/albums';
 const SPOTIFY_EMOJI_ID = '1274904265114124308';
 const PREVIOUS_EMOJI_ID = '1265476224742850633';
 const NEXT_EMOJI_ID = '1265476229876678768';
@@ -199,7 +210,7 @@ export function getTrackText(track) {
     ].join('\n');
 }
 
-function getEmoji(client, id, fallback) {
+export function getEmoji(client, id, fallback) {
     const emoji = client?.emojis?.cache?.get(id) ?? client?.application?.emojis?.cache?.get(id);
 
     if (!emoji)
@@ -364,6 +375,11 @@ function getLyricsUrl(track) {
 
 export async function execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
+
+    if (subcommand === 'album') {
+        const { executeAlbum } = await import('./spotifyalbum.js');
+        return executeAlbum(interaction);
+    }
 
     if (subcommand === 'cover') {
         const { executeCover } = await import('./spotifycover.js');
