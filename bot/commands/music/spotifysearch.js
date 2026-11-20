@@ -31,6 +31,16 @@ export const data = new SlashCommandBuilder()
         )
     )
     .addSubcommand(subcommand => subcommand
+        .setName('cover')
+        .setDescription('Show the album cover art for a Spotify track')
+        .addStringOption(option => option
+            .setName('query')
+            .setDescription('Song name, artist + song, or Spotify URL')
+            .setRequired(true)
+            .setMaxLength(500)
+        )
+    )
+    .addSubcommand(subcommand => subcommand
         .setName('preview')
         .setDescription('Play a 30s preview of a Spotify track')
         .addStringOption(option => option
@@ -354,6 +364,11 @@ function getLyricsUrl(track) {
 
 export async function execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
+
+    if (subcommand === 'cover') {
+        const { executeCover } = await import('./spotifycover.js');
+        return executeCover(interaction);
+    }
 
     if (subcommand === 'preview') {
         const { executePreview } = await import('./spotifypreview.js');
