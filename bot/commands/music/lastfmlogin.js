@@ -12,6 +12,11 @@ import {
     InteractionContextType
 } from 'discord.js';
 
+import {
+    createPendingLogin,
+    isDatabaseConfigured
+} from '../../database/lastfm.js';
+
 export const global = true;
 
 export const data = new SlashCommandBuilder()
@@ -54,14 +59,43 @@ export async function execute(interaction) {
     const apiKey = process.env.LASTFM_API_KEY;
     const callback = process.env.LASTFM_CALLBACK_URL;
 
-    if (!apiKey || !callback)
+    if (!apiKey || !callback || !isDatabaseConfigured())
         return interaction.reply(createNotice(
-            '❌ Last.fm login is not configured. Add `LASTFM_API_KEY` and `LASTFM_CALLBACK_URL` to the bot environment.'
+            '❌ Last.fm login is not configured. Add `LASTFM_API_KEY`, `LASTFM_CALLBACK_URL`, and `POSTGRES_URL` to the bot environment.'
         ));
+
+    let callbackUrl;
+
+    try {
+        callbackUrl = new URL(callback);
+    }
+    catch {
+        return interaction.reply(createNotice(
+            '❌ `LASTFM_CALLBACK_URL` is not a valid URL.'
+        ));
+    }
+
+    await interaction.deferReply({ flags: EPHEMERAL_V2 });
+
+    let state;
+
+    try {
+        state = await createPendingLogin(interaction.user.id);
+    }
+    catch (error) {
+        console.error('Last.fm pending login failed:', error);
+
+        await interaction.editReply(createNotice(
+            '❌ Could not start Last.fm login. Please try again.'
+        ));
+        return;
+    }
+
+    callbackUrl.searchParams.set('state', state);
 
     const authUrl = new URL('https://www.last.fm/api/auth/');
     authUrl.searchParams.set('api_key', apiKey);
-    authUrl.searchParams.set('cb', callback);
+    authUrl.searchParams.set('cb', callbackUrl.toString());
 
     const container = new ContainerBuilder()
         .addTextDisplayComponents(
@@ -90,7 +124,7 @@ export async function execute(interaction) {
     const note = new TextDisplayBuilder()
         .setContent('-# Once you authorize, your account will be linked to Proto Bot');
 
-    await interaction.reply({
+    await interaction.editReply({
         components: [container, button, note],
         flags: EPHEMERAL_V2,
         allowedMentions: { parse: [] }

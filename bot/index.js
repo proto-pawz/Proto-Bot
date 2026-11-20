@@ -6,6 +6,8 @@ import { database } from './database/database.js';
 
 util.log(`pid ${process.pid} | node.js ${process.version} | discord.js ${version}`);
 
+await database.logDatabaseConnection();
+
 const manager = new ShardingManager(
     './bot/bot.js',
     {

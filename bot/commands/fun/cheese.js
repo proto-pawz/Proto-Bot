@@ -8,7 +8,7 @@ import {
     MessageFlags
 } from 'discord.js';
 
-import { database } from '../../database/database.js';
+import { query } from '../../database/postgres.js';
 
 export const global = true;
 
@@ -30,23 +30,39 @@ export const data = new SlashCommandBuilder()
         InteractionContextType.PrivateChannel
     );
 
-database.exec('PRAGMA busy_timeout = 5000');
-database.exec(`
-    CREATE TABLE IF NOT EXISTS cheese_counts (
-        user_id TEXT PRIMARY KEY,
-        count INTEGER NOT NULL DEFAULT 0
-    )
-`);
-
-const incrementCheese = database.prepare(`
-    INSERT INTO cheese_counts (user_id, count)
-    VALUES (?, 1)
-    ON CONFLICT (user_id) DO UPDATE
-    SET count = count + 1
-    RETURNING count
-`);
-
 const CHEESE_BACK_TIME = 10 * 60 * 1000;
+
+let schemaPromise;
+
+function ensureSchema() {
+    if (!schemaPromise) {
+        schemaPromise = query(`
+            CREATE TABLE IF NOT EXISTS cheese_counts (
+                user_id TEXT PRIMARY KEY,
+                count INTEGER NOT NULL DEFAULT 0
+            )
+        `).catch(error => {
+            schemaPromise = undefined;
+            throw error;
+        });
+    }
+
+    return schemaPromise;
+}
+
+async function incrementCheese(userId) {
+    await ensureSchema();
+
+    const { rows } = await query(`
+        INSERT INTO cheese_counts (user_id, count)
+        VALUES ($1, 1)
+        ON CONFLICT (user_id) DO UPDATE
+        SET count = cheese_counts.count + 1
+        RETURNING count
+    `, [userId]);
+
+    return rows[0].count;
+}
 
 function createCheeseBackButton(customId, disabled = false) {
     return new ActionRowBuilder()
@@ -61,7 +77,20 @@ function createCheeseBackButton(customId, disabled = false) {
 
 export async function execute(interaction) {
     const target = interaction.options.getUser('user');
-    const { count } = incrementCheese.get(target.id);
+    let count;
+
+    try {
+        count = await incrementCheese(target.id);
+    }
+    catch (error) {
+        console.error('cheese increment failed:', error);
+
+        return interaction.reply({
+            content: '❌ Could not update the cheese counter.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
     const customId = `cheese_back_${interaction.id}_${interaction.user.id}_${target.id}`;
 
     await interaction.reply({
@@ -93,7 +122,7 @@ export async function execute(interaction) {
                 return await button.deferUpdate();
 
             used = true;
-            const { count: backCount } = incrementCheese.get(interaction.user.id);
+            const backCount = await incrementCheese(interaction.user.id);
 
             await button.deferUpdate();
             await button.message.edit({

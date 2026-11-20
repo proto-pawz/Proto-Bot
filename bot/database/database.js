@@ -1,7 +1,20 @@
-import { DatabaseSync } from 'node:sqlite';
+import {
+    closePool,
+    getClient,
+    getPool,
+    isDatabaseConfigured,
+    logDatabaseConnection,
+    query
+} from './postgres.js';
 
-const ROOT = import.meta.dirname;
+export const database = {
+    query,
+    getClient,
+    getPool,
+    isDatabaseConfigured,
+    logDatabaseConnection,
+    closePool,
+    exec: sql => query(sql)
+};
 
-class DataBase extends DatabaseSync { }
-
-export const database = new DataBase(`${ROOT}/db.sqlite`);
+export default database;
