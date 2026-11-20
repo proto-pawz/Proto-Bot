@@ -1,10 +1,13 @@
 import {
     SlashCommandBuilder,
-    EmbedBuilder,
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
+    ContainerBuilder,
     MessageFlags,
+    SeparatorBuilder,
+    SeparatorSpacingSize,
+    TextDisplayBuilder,
     ApplicationIntegrationType,
     InteractionContextType
 } from 'discord.js';
@@ -119,7 +122,7 @@ export async function execute(interaction) {
         return { text: '🤝 It\'s a push!', color: 0xFEE75C };
     }
 
-    function buildEmbed() {
+    function buildContainer() {
         const playerTotal = handValue(playerHand);
         const dealerCards = finished
             ? formatHand(dealerHand)
@@ -129,24 +132,25 @@ export async function execute(interaction) {
             ? getOutcome()
             : { text: 'Hit or stand?', color: 0x5865F2 };
 
-        return new EmbedBuilder()
-            .setColor(color)
-            .setTitle('🃏 Blackjack')
-            .setDescription(`**You** vs **The Dealer**\n\n${text}`)
-            .addFields(
-                {
-                    name: 'Your Hand',
-                    value: `${formatHand(playerHand)} (**${playerTotal}**)`,
-                    inline: true
-                },
-                {
-                    name: 'The Dealer',
-                    value: `${dealerCards} (${dealerTotal})`,
-                    inline: true
-                }
+        return new ContainerBuilder()
+            .setAccentColor(color)
+            .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent('## 🃏 Blackjack'),
+                new TextDisplayBuilder().setContent(`**You** vs **The Dealer**\n\n${text}`),
+                new TextDisplayBuilder().setContent([
+                    `**Your Hand**\n${formatHand(playerHand)} (**${playerTotal}**)`,
+                    `**The Dealer**\n${dealerCards} (${dealerTotal})`
+                ].join('\n'))
             )
-            .setFooter({ text: `Played by ${displayName} ${where}` })
-            .setTimestamp();
+            .addSeparatorComponents(
+                new SeparatorBuilder()
+                    .setDivider(true)
+                    .setSpacing(SeparatorSpacingSize.Small)
+            )
+            .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent(`-# Played by ${displayName} ${where}`)
+            )
+            .addActionRowComponents(buildButtons());
     }
 
     function buildButtons() {
@@ -176,8 +180,9 @@ export async function execute(interaction) {
     startRound();
 
     await interaction.reply({
-        embeds: [buildEmbed()],
-        components: [buildButtons()]
+        components: [buildContainer()],
+        flags: MessageFlags.IsComponentsV2,
+        allowedMentions: { parse: [] }
     });
 
     const msg = await interaction.fetchReply();
@@ -203,8 +208,9 @@ export async function execute(interaction) {
             return await i.deferUpdate();
 
         await i.update({
-            embeds: [buildEmbed()],
-            components: [buildButtons()]
+            components: [buildContainer()],
+            flags: MessageFlags.IsComponentsV2,
+            allowedMentions: { parse: [] }
         });
     });
 }

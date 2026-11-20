@@ -91,8 +91,11 @@ export async function execute(interaction) {
                 .setStyle(ButtonStyle.Primary)
         );
 
+    const container = createContainer(question, owner);
+    container.addActionRowComponents(rollButton);
+
     const message = await interaction.reply({
-        components: [createContainer(question, owner), rollButton],
+        components: [container],
         flags: FLAGS,
         allowedMentions: { parse: [] }
     });
