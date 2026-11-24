@@ -19,6 +19,7 @@ import {
 const LASTFM_EMOJI = '<:lastfm_nobg:1573228913143062690>';
 const FLAGS = MessageFlags.IsComponentsV2;
 const LASTFM_API_URL = 'https://ws.audioscrobbler.com/2.0/';
+const COLLECTOR_TIMEOUT_MS = 120_000;
 
 export const subcommand = subcommand => subcommand
     .setName('profile')
@@ -60,6 +61,25 @@ function formatDecimal(value) {
             maximumFractionDigits: 1
         })
         .replace('.', ',');
+}
+
+function formatEstimatedDuration(plays) {
+    const minutes = Math.round((Number(plays) || 0) * 3.5);
+    const days = Math.floor(minutes / 1440);
+    const hours = Math.floor((minutes % 1440) / 60);
+    const remainingMinutes = minutes % 60;
+    const parts = [];
+
+    if (days)
+        parts.push(`${days} day${days === 1 ? '' : 's'}`);
+
+    if (hours)
+        parts.push(`${hours} hour${hours === 1 ? '' : 's'}`);
+
+    if (remainingMinutes)
+        parts.push(`${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}`);
+
+    return parts.join(', ') || '0 minutes';
 }
 
 async function lastfmRequest(apiKey, method, username, extra = {}) {
@@ -104,6 +124,160 @@ function getLargestImage(images) {
     return list[list.length - 1]['#text'];
 }
 
+async function getRecentMonths(apiKey, username) {
+    const now = new Date();
+    const months = [];
+
+    for (let offset = 0; offset < 6; offset++) {
+        const start = new Date(Date.UTC(
+            now.getUTCFullYear(),
+            now.getUTCMonth() - offset,
+            1
+        ));
+        const end = new Date(Date.UTC(
+            now.getUTCFullYear(),
+            now.getUTCMonth() - offset + 1,
+            1
+        ));
+
+        const data = await lastfmRequest(apiKey, 'user.getRecentTracks', username, {
+            from: Math.floor(start.getTime() / 1000),
+            to: Math.floor(end.getTime() / 1000) - 1,
+            limit: 1
+        });
+
+        months.push({
+            name: start.toLocaleString('en-US', {
+                month: 'long',
+                timeZone: 'UTC'
+            }),
+            plays: Number(data.recenttracks?.['@attr']?.total) || 0
+        });
+    }
+
+    return months;
+}
+
+function createNavigationRow({ userId, profileName, profileUrl, view }) {
+    const suffix = profileName.slice(0, 32);
+    const historyId = `lastfm-history:${userId}:${suffix}`;
+    const profileId = `lastfm-profile:${userId}:${suffix}`;
+
+    const navigationButton = view === 'profile'
+        ? new ButtonBuilder()
+            .setCustomId(historyId)
+            .setLabel('📖 History')
+            .setStyle(ButtonStyle.Primary)
+        : new ButtonBuilder()
+            .setCustomId(profileId)
+            .setLabel('ℹ️ Profile')
+            .setStyle(ButtonStyle.Primary);
+
+    const row = new ActionRowBuilder()
+        .addComponents(navigationButton);
+
+    row.addComponents(
+        new ButtonBuilder()
+            .setLabel('Last.fm')
+            .setEmoji(LASTFM_EMOJI)
+            .setStyle(ButtonStyle.Link)
+            .setURL(profileUrl)
+    );
+
+    return { row, historyId, profileId };
+}
+
+function addAvatar(container, imageUrl) {
+    if (imageUrl) {
+        container.addMediaGalleryComponents(
+            new MediaGalleryBuilder().addItems(
+                new MediaGalleryItemBuilder().setURL(imageUrl)
+            )
+        );
+    }
+
+    return container;
+}
+
+function separator() {
+    return new SeparatorBuilder()
+        .setDivider(true)
+        .setSpacing(SeparatorSpacingSize.Small);
+}
+
+function createProfileContainer(context) {
+    const { row } = createNavigationRow({ ...context, view: 'profile' });
+
+    const container = addAvatar(
+        new ContainerBuilder().setAccentColor(0xBA0000),
+        context.imageUrl
+    );
+
+    container
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(context.header)
+        )
+        .addSeparatorComponents(separator())
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(context.counts)
+        )
+        .addSeparatorComponents(separator())
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(context.averages)
+        )
+        .addSeparatorComponents(separator())
+        .addTextDisplayComponents(
+            new TextDisplayBuilder()
+                .setContent(`-# ${formatNumber(context.friendTotal)} friends on Last.fm`)
+        )
+        .addActionRowComponents(row);
+
+    return container;
+}
+
+function createHistoryContainer(context) {
+    const { row } = createNavigationRow({ ...context, view: 'history' });
+
+    const historyHeader = [
+        `## ${LASTFM_EMOJI} ${context.displayName}'s history`,
+        `**${formatNumber(context.playcount)}** scrobbles`,
+        context.registered > 0 ? `Since <t:${context.registered}:D>` : null
+    ]
+        .filter(Boolean)
+        .join('\n');
+
+    const historyLines = context.months.map(month =>
+        `**\`${month.name}\`** - **${formatNumber(month.plays)}** plays - ${formatEstimatedDuration(month.plays)}`
+    );
+
+    const historyText = [
+        '**Recent months**',
+        ...(historyLines.length ? historyLines : ['No recent scrobbles found.'])
+    ].join('\n');
+
+    const container = addAvatar(
+        new ContainerBuilder().setAccentColor(0xBA0000),
+        context.imageUrl
+    );
+
+    container
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(historyHeader)
+        )
+        .addSeparatorComponents(separator())
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(historyText)
+        )
+        .addSeparatorComponents(separator())
+        .addTextDisplayComponents(
+            new TextDisplayBuilder()
+                .setContent('-# Listening times are estimates based on play counts.')
+        )
+        .addActionRowComponents(row);
+
+    return container;
+}
+
 export async function execute(interaction) {
     const apiKey = process.env.LASTFM_API_KEY;
 
@@ -145,12 +319,13 @@ export async function execute(interaction) {
     await interaction.deferReply({ flags: FLAGS });
 
     try {
-        const [infoData, artistsData, albumsData, tracksData, friendsData] = await Promise.all([
+        const [infoData, artistsData, albumsData, tracksData, friendsData, months] = await Promise.all([
             lastfmRequest(apiKey, 'user.getInfo', username),
             lastfmRequest(apiKey, 'user.getTopArtists', username, { limit: 10 }),
             lastfmRequest(apiKey, 'user.getTopAlbums', username, { limit: 1 }),
             lastfmRequest(apiKey, 'user.getTopTracks', username, { limit: 1 }),
-            lastfmRequest(apiKey, 'user.getFriends', username, { limit: 1 }).catch(() => null)
+            lastfmRequest(apiKey, 'user.getFriends', username, { limit: 1 }).catch(() => null),
+            getRecentMonths(apiKey, username).catch(() => [])
         ]);
 
         const info = infoData.user ?? {};
@@ -184,83 +359,70 @@ export async function execute(interaction) {
         const albumsPerArtist = artistTotal > 0 ? albumTotal / artistTotal : 0;
         const tracksPerArtist = artistTotal > 0 ? trackTotal / artistTotal : 0;
 
-        const header = [
-            `## ${LASTFM_EMOJI} ${displayName}`,
-            `**${formatNumber(playcount)}** scrobbles`,
-            registered > 0 ? `Since <t:${registered}:D>` : null
-        ]
-            .filter(Boolean)
-            .join('\n');
+        const context = {
+            userId: interaction.user.id,
+            profileName,
+            displayName,
+            profileUrl,
+            imageUrl: getLargestImage(info.image),
+            playcount,
+            registered,
+            friendTotal,
+            months,
+            header: [
+                `## ${LASTFM_EMOJI} ${displayName}`,
+                `**${formatNumber(playcount)}** scrobbles`,
+                registered > 0 ? `Since <t:${registered}:D>` : null
+            ]
+                .filter(Boolean)
+                .join('\n'),
+            counts: [
+                `**${formatNumber(trackTotal)}** different tracks`,
+                `**${formatNumber(albumTotal)}** different albums`,
+                `**${formatNumber(artistTotal)}** different artists`
+            ].join('\n'),
+            averages: [
+                `Average of **${formatDecimal(averagePerDay)}** scrobbles per day`,
+                `Average of **${formatDecimal(albumsPerArtist)}** albums and **${formatDecimal(tracksPerArtist)}** tracks per artist`,
+                `Top **10** artists make up **${topPercent}%** of scrobbles`
+            ].join('\n')
+        };
 
-        const counts = [
-            `**${formatNumber(trackTotal)}** different tracks`,
-            `**${formatNumber(albumTotal)}** different albums`,
-            `**${formatNumber(artistTotal)}** different artists`
-        ].join('\n');
+        const profileContainer = createProfileContainer(context);
+        const historyContainer = createHistoryContainer(context);
 
-        const averages = [
-            `Average of **${formatDecimal(averagePerDay)}** scrobbles per day`,
-            `Average of **${formatDecimal(albumsPerArtist)}** albums and **${formatDecimal(tracksPerArtist)}** tracks per artist`,
-            `Top **10** artists make up **${topPercent}%** of scrobbles`
-        ].join('\n');
+        const { historyId, profileId } = createNavigationRow({ ...context, view: 'profile' });
 
-        const imageUrl = getLargestImage(info.image);
-
-        const container = new ContainerBuilder()
-            .setAccentColor(0xBA0000);
-
-        if (imageUrl)
-            container.addMediaGalleryComponents(
-                new MediaGalleryBuilder().addItems(
-                    new MediaGalleryItemBuilder().setURL(imageUrl)
-                )
-            );
-
-        container
-            .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent(header)
-            )
-            .addSeparatorComponents(
-                new SeparatorBuilder()
-                    .setDivider(true)
-                    .setSpacing(SeparatorSpacingSize.Small)
-            )
-            .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent(counts)
-            )
-            .addSeparatorComponents(
-                new SeparatorBuilder()
-                    .setDivider(true)
-                    .setSpacing(SeparatorSpacingSize.Small)
-            )
-            .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent(averages)
-            )
-            .addSeparatorComponents(
-                new SeparatorBuilder()
-                    .setDivider(true)
-                    .setSpacing(SeparatorSpacingSize.Small)
-            )
-            .addTextDisplayComponents(
-                new TextDisplayBuilder()
-                    .setContent(`-# ${formatNumber(friendTotal)} friends on Last.fm`)
-            );
-
-        const button = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setLabel('Last.fm')
-                    .setEmoji(LASTFM_EMOJI)
-                    .setStyle(ButtonStyle.Link)
-                    .setURL(profileUrl)
-            );
-
-        container.addActionRowComponents(button);
-
-        await interaction.editReply({
-            components: [container],
+        const message = await interaction.editReply({
+            components: [profileContainer],
             flags: FLAGS,
             allowedMentions: { parse: [] }
+        });
+
+        const collector = message.createMessageComponentCollector({
+            filter: component =>
+                component.user.id === interaction.user.id &&
+                (component.customId === historyId || component.customId === profileId),
+            time: COLLECTOR_TIMEOUT_MS
+        });
+
+        collector.on('collect', async component => {
+            try {
+                await component.deferUpdate();
+
+                await component.editReply({
+                    components: [
+                        component.customId === historyId
+                            ? historyContainer
+                            : profileContainer
+                    ],
+                    flags: FLAGS,
+                    allowedMentions: { parse: [] }
+                });
+            }
+            catch (error) {
+                console.error('Last.fm profile navigation failed:', error);
+            }
         });
     }
     catch (error) {
