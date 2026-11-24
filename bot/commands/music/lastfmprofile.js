@@ -3,12 +3,12 @@ import {
     ButtonBuilder,
     ButtonStyle,
     ContainerBuilder,
-    MediaGalleryBuilder,
-    MediaGalleryItemBuilder,
     MessageFlags,
+    SectionBuilder,
     SeparatorBuilder,
     SeparatorSpacingSize,
-    TextDisplayBuilder
+    TextDisplayBuilder,
+    ThumbnailBuilder
 } from 'discord.js';
 
 import {
@@ -187,16 +187,16 @@ function createNavigationRow({ userId, profileName, profileUrl, view }) {
     return { row, historyId, profileId };
 }
 
-function addAvatar(container, imageUrl) {
-    if (imageUrl) {
-        container.addMediaGalleryComponents(
-            new MediaGalleryBuilder().addItems(
-                new MediaGalleryItemBuilder().setURL(imageUrl)
-            )
+function createHeaderSection(content, imageUrl) {
+    const section = new SectionBuilder()
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(content)
         );
-    }
 
-    return container;
+    if (imageUrl)
+        section.setThumbnailAccessory(new ThumbnailBuilder().setURL(imageUrl));
+
+    return section;
 }
 
 function separator() {
@@ -208,15 +208,10 @@ function separator() {
 function createProfileContainer(context) {
     const { row } = createNavigationRow({ ...context, view: 'profile' });
 
-    const container = addAvatar(
-        new ContainerBuilder().setAccentColor(0xBA0000),
-        context.imageUrl
-    );
+    const container = new ContainerBuilder().setAccentColor(0xBA0000);
 
     container
-        .addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(context.header)
-        )
+        .addSectionComponents(createHeaderSection(context.header, context.imageUrl))
         .addSeparatorComponents(separator())
         .addTextDisplayComponents(
             new TextDisplayBuilder().setContent(context.counts)
@@ -255,15 +250,10 @@ function createHistoryContainer(context) {
         ...(historyLines.length ? historyLines : ['No recent scrobbles found.'])
     ].join('\n');
 
-    const container = addAvatar(
-        new ContainerBuilder().setAccentColor(0xBA0000),
-        context.imageUrl
-    );
+    const container = new ContainerBuilder().setAccentColor(0xBA0000);
 
     container
-        .addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(historyHeader)
-        )
+        .addSectionComponents(createHeaderSection(historyHeader, context.imageUrl))
         .addSeparatorComponents(separator())
         .addTextDisplayComponents(
             new TextDisplayBuilder().setContent(historyText)

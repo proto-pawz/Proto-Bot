@@ -18,6 +18,21 @@ import {
 } from '../../database/lastfm.js';
 
 import {
+    execute as executeAlbums,
+    subcommand as albumsSubcommand
+} from './lastfmalbums.js';
+
+import {
+    execute as executeArtists,
+    subcommand as artistsSubcommand
+} from './lastfmartists.js';
+
+import {
+    execute as executeFm,
+    subcommand as fmSubcommand
+} from './lastfmfm.js';
+
+import {
     execute as executeLogout,
     subcommand as logoutSubcommand
 } from './lastfmlogout.js';
@@ -26,6 +41,11 @@ import {
     execute as executeProfile,
     subcommand as profileSubcommand
 } from './lastfmprofile.js';
+
+import {
+    execute as executeTracks,
+    subcommand as tracksSubcommand
+} from './lastfmtracks.js';
 
 export const global = true;
 
@@ -38,6 +58,10 @@ export const data = new SlashCommandBuilder()
     )
     .addSubcommand(logoutSubcommand)
     .addSubcommand(profileSubcommand)
+    .addSubcommand(albumsSubcommand)
+    .addSubcommand(artistsSubcommand)
+    .addSubcommand(fmSubcommand)
+    .addSubcommand(tracksSubcommand)
     .setIntegrationTypes(
         ApplicationIntegrationType.GuildInstall,
         ApplicationIntegrationType.UserInstall
@@ -72,6 +96,18 @@ export async function execute(interaction) {
 
     if (subcommand === 'profile')
         return executeProfile(interaction);
+
+    if (subcommand === 'albums')
+        return executeAlbums(interaction);
+
+    if (subcommand === 'artists')
+        return executeArtists(interaction);
+
+    if (subcommand === 'fm')
+        return executeFm(interaction);
+
+    if (subcommand === 'tracks')
+        return executeTracks(interaction);
 
     if (subcommand !== 'login')
         return;
