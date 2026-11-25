@@ -25,15 +25,21 @@ import sharp from 'sharp';
 
 import { getEmoji } from '../music/spotifysearch.js';
 
+import {
+    execute as executeCosmetic,
+    subcommand as cosmeticSubcommand
+} from './fortnitecosmetic.js';
+
 export const global = true;
 
 export const data = new SlashCommandBuilder()
     .setName('fortnite')
-    .setDescription('Fortnite commands')
+    .setDescription('Fortnite utilities')
     .addSubcommand(subcommand => subcommand
         .setName('shop')
-        .setDescription('Show the current Fortnite item shop rotation')
+        .setDescription("View today's Fortnite shop")
     )
+    .addSubcommand(cosmeticSubcommand)
     .setIntegrationTypes(
         ApplicationIntegrationType.GuildInstall,
         ApplicationIntegrationType.UserInstall
@@ -467,7 +473,12 @@ function createNotice(content) {
 }
 
 export async function execute(interaction) {
-    if (interaction.options.getSubcommand() !== 'shop')
+    const subcommandName = interaction.options.getSubcommand();
+
+    if (subcommandName === 'cosmetic')
+        return executeCosmetic(interaction);
+
+    if (subcommandName !== 'shop')
         return;
 
     await interaction.deferReply({ flags: FLAGS });

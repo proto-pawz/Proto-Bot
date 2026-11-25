@@ -3,7 +3,7 @@ import { MessageFlags } from 'discord.js';
 import {
     buildPage,
     loadPage
-} from '../../../../commands/fun/fortniteshop.js';
+} from '../../../../commands/fortnite/fortniteshop.js';
 
 /**
  * Handles the "jump to page" modal for /fortnite shop.
