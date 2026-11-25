@@ -187,16 +187,23 @@ function createNavigationRow({ userId, profileName, profileUrl, view }) {
     return { row, historyId, profileId };
 }
 
-function createHeaderSection(content, imageUrl) {
-    const section = new SectionBuilder()
-        .addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(content)
-        );
+function addHeader(container, content, imageUrl) {
+    const text = new TextDisplayBuilder().setContent(content);
 
-    if (imageUrl)
-        section.setThumbnailAccessory(new ThumbnailBuilder().setURL(imageUrl));
+    if (imageUrl) {
+        const section = new SectionBuilder()
+            .addTextDisplayComponents(text)
+            .setThumbnailAccessory(new ThumbnailBuilder().setURL(imageUrl));
 
-    return section;
+        container.addSectionComponents(section);
+    }
+    else {
+        // A section requires an accessory, so use a plain text display when
+        // the profile has no avatar image.
+        container.addTextDisplayComponents(text);
+    }
+
+    return container;
 }
 
 function separator() {
@@ -208,10 +215,13 @@ function separator() {
 function createProfileContainer(context) {
     const { row } = createNavigationRow({ ...context, view: 'profile' });
 
-    const container = new ContainerBuilder().setAccentColor(0xBA0000);
+    const container = addHeader(
+        new ContainerBuilder().setAccentColor(0xBA0000),
+        context.header,
+        context.imageUrl
+    );
 
     container
-        .addSectionComponents(createHeaderSection(context.header, context.imageUrl))
         .addSeparatorComponents(separator())
         .addTextDisplayComponents(
             new TextDisplayBuilder().setContent(context.counts)
@@ -250,10 +260,13 @@ function createHistoryContainer(context) {
         ...(historyLines.length ? historyLines : ['No recent scrobbles found.'])
     ].join('\n');
 
-    const container = new ContainerBuilder().setAccentColor(0xBA0000);
+    const container = addHeader(
+        new ContainerBuilder().setAccentColor(0xBA0000),
+        historyHeader,
+        context.imageUrl
+    );
 
     container
-        .addSectionComponents(createHeaderSection(historyHeader, context.imageUrl))
         .addSeparatorComponents(separator())
         .addTextDisplayComponents(
             new TextDisplayBuilder().setContent(historyText)

@@ -115,21 +115,25 @@ function createNowPlayingContainer({ displayName, track, trackUrl, imageUrl, pla
         `**${artist}** • *${album}*`
     ].join('\n');
 
-    const section = new SectionBuilder()
-        .addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(header)
-        );
+    const text = new TextDisplayBuilder().setContent(header);
+    const container = new ContainerBuilder().setAccentColor(0xBA0000);
 
-    if (imageUrl)
-        section.setThumbnailAccessory(new ThumbnailBuilder().setURL(imageUrl));
-
-    return new ContainerBuilder()
-        .setAccentColor(0xBA0000)
-        .addSectionComponents(section)
-        .addTextDisplayComponents(
-            new TextDisplayBuilder()
-                .setContent(`-# ${formatNumber(playcount)} total scrobbles`)
+    if (imageUrl) {
+        container.addSectionComponents(
+            new SectionBuilder()
+                .addTextDisplayComponents(text)
+                .setThumbnailAccessory(new ThumbnailBuilder().setURL(imageUrl))
         );
+    }
+    else {
+        // A section requires an accessory, so fall back to plain text.
+        container.addTextDisplayComponents(text);
+    }
+
+    return container.addTextDisplayComponents(
+        new TextDisplayBuilder()
+            .setContent(`-# ${formatNumber(playcount)} total scrobbles`)
+    );
 }
 
 export async function execute(interaction) {
